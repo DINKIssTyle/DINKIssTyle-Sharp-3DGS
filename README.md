@@ -26,7 +26,6 @@ Whether you are an artist, developer, or 3D enthusiast, Sharp Swift provides a s
 
 ### 🛠️ Zero-Config Setup
 - **Automatic Environment Management**: First launch automatically sets up a Python virtual environment, installs dependencies, and downloads necessary ML models.
-- **Smart Migration**: Intelligently handles workspace folders (`~/Documents/Sharp Swift`), migrating legacy data if detected.
 
 ---
 
@@ -34,7 +33,7 @@ Whether you are an artist, developer, or 3D enthusiast, Sharp Swift provides a s
 
 - **macOS**: macOS Ventura (13.0) or later.
 - **Processor**: Apple Silicon (M1/M2/M3) chip highly recommended for ML inference and rendering performance.
-- **Python**: Python 3.10+ installed on the system (for the backend ML pipeline).
+- **Python**: Python 3.10+ (Required only to create the app's isolated virtual environment).
 
 ---
 
