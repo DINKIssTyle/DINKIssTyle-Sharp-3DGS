@@ -41,6 +41,14 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 echo "   - 바이너리 복사"
 cp "${BUILD_DIR}/${EXECUTABLE_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 
+# 3.1 Copy Resource Bundle (Fix for Bundle.module crash)
+if [ -d "${BUILD_DIR}/SharpConverter_SharpConverter.bundle" ]; then
+    echo "   - 리소스 번들 복사 (App Root for SwiftPM compatibility)"
+    cp -r "${BUILD_DIR}/SharpConverter_SharpConverter.bundle" "${APP_BUNDLE}/"
+else 
+    echo "⚠️  리소스 번들이 없습니다. Bundle.module 접근 시 크래시 주의."
+fi
+
 # 4. Copy Info.plist
 if [ -f "${SOURCE_PLIST}" ]; then
     echo "   - Info.plist 설정"
@@ -78,6 +86,7 @@ fi
 
 # 7. Ad-hoc Signing
 echo -e "${GREEN}🔏 앱 서명 (Ad-hoc)...${NC}"
+xattr -cr "${APP_BUNDLE}"
 codesign --force --deep --sign - "${APP_BUNDLE}"
 
 echo -e "${BLUE}🎉 빌드 완료! ./${APP_BUNDLE} 실행 가능${NC}"
