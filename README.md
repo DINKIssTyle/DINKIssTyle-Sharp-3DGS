@@ -1,5 +1,9 @@
 # Sharp Swift 🚀
 
+<p align="center">
+  <img src="Docs/Sharp_Swift.gif" alt="Video Demo" width="80%">
+</p>
+
 **Sharp Swift** is a cutting-edge macOS application that transforms static 2D images into immersive 3D Gaussian Splatting scenes. Built with a focus on performance and usability, it combines a robust machine learning pipeline with a high-performance, native Metal renderer.
 
 Whether you are an artist, developer, or 3D enthusiast, Sharp Swift provides a seamless workflow to generate, view, animate, and share 3D moments from a single photo.
