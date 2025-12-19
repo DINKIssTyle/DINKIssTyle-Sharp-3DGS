@@ -132,35 +132,39 @@ class AppState: ObservableObject {
                      try await self.setupRunner.runCommand("/usr/bin/curl", arguments: ["-o", modelPath, "https://ml-site.cdn-apple.com/models/sharp/sharp_2572gikvuh.pt"])
                 }
                 
-                // 2. Build Brush Viewer (New Step)
+                // 2. Build Brush Viewer (Optional: Only if source exists)
                 let brushSourceStart = "/Users/dinki/Documents/GitHub/DINKIssTyle-Sharp-3DGS/brush"
                 let brushBinDest = "\(binPath)/brush"
                 
-                if !FileManager.default.fileExists(atPath: brushBinDest) {
-                    self.setupRunner.log("Building Brush Viewer from source...")
-                    // We need to find cargo. It's likely in ~/.cargo/bin/cargo
-                    let cargoPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo/bin/cargo"
-                    
-                    if FileManager.default.fileExists(atPath: cargoPath) {
-                        // Build command: cargo build --release --no-default-features --bin brush
-                        // Running in the brush source directory
-                         try await self.setupRunner.runCommand(cargoPath, arguments: ["build", "--release", "--no-default-features", "--bin", "brush"], currentDirectoryPath: brushSourceStart)
-                         
-                         // Copy binary
-                         let sourceBin = "\(brushSourceStart)/target/release/brush"
-                         if FileManager.default.fileExists(atPath: sourceBin) {
-                             if FileManager.default.fileExists(atPath: brushBinDest) {
-                                 try FileManager.default.removeItem(atPath: brushBinDest)
+                if FileManager.default.fileExists(atPath: brushSourceStart) {
+                    if !FileManager.default.fileExists(atPath: brushBinDest) {
+                        self.setupRunner.log("Building Brush Viewer from source...")
+                        // We need to find cargo. It's likely in ~/.cargo/bin/cargo
+                        let cargoPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo/bin/cargo"
+                        
+                        if FileManager.default.fileExists(atPath: cargoPath) {
+                            // Build command: cargo build --release --no-default-features --bin brush
+                            // Running in the brush source directory
+                             try await self.setupRunner.runCommand(cargoPath, arguments: ["build", "--release", "--no-default-features", "--bin", "brush"], currentDirectoryPath: brushSourceStart)
+                             
+                             // Copy binary
+                             let sourceBin = "\(brushSourceStart)/target/release/brush"
+                             if FileManager.default.fileExists(atPath: sourceBin) {
+                                 if FileManager.default.fileExists(atPath: brushBinDest) {
+                                     try FileManager.default.removeItem(atPath: brushBinDest)
+                                 }
+                                 try FileManager.default.copyItem(atPath: sourceBin, toPath: brushBinDest)
+                                 self.setupRunner.log("Brush Viewer built and installed successfully.")
+                             } else {
+                                 self.setupRunner.log("Build failed: Binary not found at \(sourceBin)")
+                                 // Don't throw, just log warning as it's optional
                              }
-                             try FileManager.default.copyItem(atPath: sourceBin, toPath: brushBinDest)
-                             self.setupRunner.log("Brush Viewer built and installed successfully.")
-                         } else {
-                             self.setupRunner.log("Build failed: Binary not found at \(sourceBin)")
-                             throw NSError(domain: "App", code: 2, userInfo: [NSLocalizedDescriptionKey: "Build failed"])
-                         }
-                    } else {
-                        self.setupRunner.log("Cargo not found at \(cargoPath). Please install Rust.")
+                        } else {
+                            self.setupRunner.log("Cargo not found at \(cargoPath). Skipping Brush build.")
+                        }
                     }
+                } else {
+                    self.setupRunner.log("Brush source not found at \(brushSourceStart). Skipping build.")
                 }
 
                 // 3. Venv
