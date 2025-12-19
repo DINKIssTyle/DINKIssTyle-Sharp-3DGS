@@ -29,26 +29,55 @@ Whether you are an artist, developer, or 3D enthusiast, Sharp Swift provides a s
 
 ---
 
-## 💻 System Requirements
+## 📖 Usage Guide
 
-- **macOS**: macOS Ventura (13.0) or later.
-- **Processor**: Apple Silicon (M1/M2/M3) chip highly recommended for ML inference and rendering performance.
-- **Python**: Python 3.10+ (Required only to create the app's isolated virtual environment).
+### 1. Initial Setup (First Run)
+When you launch Sharp Swift for the first time, you will see a yellow **"Setup Required"** status.
+1. Click the status button.
+2. The app will automatically:
+    - Create a workspace at `~/Documents/Sharp Swift`.
+    - Setup a Python virtual environment.
+    - Download necessary machine learning models.
+3. Once the indicator turns **Green (Ready)**, you are good to go!
 
----
+### 2. Importing & Viewing
+- **Import**: Simply **drag and drop** an image (`.jpg`, `.png`) or a 3D Scan file (`.ply`) onto the app window.
+- **Open**: Or use the **"Open Image / PLY"** button at the top right.
 
-## 🎮 Controls
+### 3. Viewer Controls
+**Top Toolbar:**
+- `x`: Close the viewer.
+- `⟲`: Reset Camera to default position.
+- `Scope`: Toggle "Click-to-Focus" mode.
+- `Clock`: Show/Hide the **Animation Timeline**.
+- `Speed`: Adjust camera movement sensitivity.
+- `FOV`: Adjust Field of View.
 
-### 3D View Navigation
-- **Rotate/Orbit**: Left Click + Drag
-- **Pan**: Right Click + Drag (or Two-finger drag)
-- **Zoom**: Scroll Wheel (or Pinch gesture)
-- **Roll**: Option + Left Click + Drag
+**Keyboard Shortcuts:**
+- **Movement**: `W` / `S` (Forward/Back), `A` / `D` (Left/Right), `X` / `Z` (Up/Down)
+- **Rotation**: `Q` / `E` (Yaw), `C` / `V` (Pitch), `R` / `F` (Roll)
+- **Boost**: Hold `Shift` to move faster.
+- **General**: `Esc` to close viewer.
 
-### Timeline
-- **Add Keyframe**: Adds the current camera view as a keyframe at the current time.
-- **Del Keyframe**: Removes the keyframe at the current cursor position.
-- **Scrubbing**: Drag the slider handle to preview the animation.
+**Mouse Controls:**
+- **Left Drag**: Orbit / Rotate
+- **Right Drag**: Pan
+- **Scroll**: Zoom
+- **Option + Left Drag**: Roll
+
+### 4. Animation & Export
+1. Open the timeline by clicking the **Clock Icon**.
+2. **Add Keyframes**: 
+   - Move the camera to a desired spot.
+   - Click **"Add Key"** on the left.
+   - Scrub the slider to a new time position.
+   - Move the camera to the next spot.
+   - Click **"Add Key"** again.
+3. **Preview**: Drag the slider or use Play/Rewind controls.
+4. **Export**:
+   - Set the **Total Frames** in the center input (`300` by default).
+   - Choose **Resolution** (`720p`, `1080p`, etc) and **FPS** on the right.
+   - Click **"Export"** to save an `.mp4` video.
 
 ---
 
