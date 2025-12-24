@@ -37,6 +37,9 @@ class Camera {
     var theta: Float = 0.0
     var phi: Float = 0.0
     
+    // Separate orbit pivot (Click to Focus sets this)
+    var orbitPivot: SIMD3<Float>? = nil
+    
     init() {
         updatePosition()
     }
@@ -68,14 +71,15 @@ class Camera {
     }
     
     func rotate(dx: Float, dy: Float, speed: Float = 1.0) {
-        // Simple orbit around target
+        // Orbit around orbitPivot if set, otherwise around target
+        let pivot = orbitPivot ?? target
+        
         // Create rotation from current position
-        let forward = position - target
-        let right = normalize(cross(up, forward)) // Use dynamic Up
-        // let upLocal = normalize(cross(forward, right)) // Not used currently
+        let forward = position - pivot
+        let right = normalize(cross(up, forward))
         
         // Rotate around Y and Local X
-        let sensitivity: Float = 0.003 * speed // Reduced sensitivity
+        let sensitivity: Float = 0.003 * speed
         
         // Rotation helper
         func rotationMatrix(angle: Float, axis: SIMD3<Float>) -> matrix_float4x4 {
@@ -88,31 +92,39 @@ class Camera {
             return float4x4(rows)
         }
         
-        // Rotate around World Up (self.up) instead of hardcoded Y
-        // Note: dy is pitch, dx is yaw
-        let rotY = rotationMatrix(angle: -dx * sensitivity, axis: up) // Yaw around Up
-        let rotX = rotationMatrix(angle: -dy * sensitivity, axis: right) // Pitch around Right
+        // Direction inverted to match standard 3D tools (drag right = view rotates left)
+        let rotY = rotationMatrix(angle: dx * sensitivity, axis: up)
+        let rotX = rotationMatrix(angle: dy * sensitivity, axis: right)
         
-        // Apply rotation
+        // Apply rotation to camera position
         let currentPos4 = SIMD4<Float>(forward.x, forward.y, forward.z, 1.0)
         let newPos4 = rotY * rotX * currentPos4
         let newPos = SIMD3<Float>(newPos4.x, newPos4.y, newPos4.z)
         
-        position = target + newPos
+        position = pivot + newPos
+        
+        // Also rotate target around pivot to maintain view direction
+        let targetOffset = target - pivot
+        let targetOffset4 = SIMD4<Float>(targetOffset.x, targetOffset.y, targetOffset.z, 1.0)
+        let newTargetOffset4 = rotY * rotX * targetOffset4
+        target = pivot + SIMD3<Float>(newTargetOffset4.x, newTargetOffset4.y, newTargetOffset4.z)
     }
     
     func pan(dx: Float, dy: Float, speed: Float = 1.0) {
         let forward = normalize(target - position)
-        // Use self.up for consistent panning
         let right = normalize(cross(up, forward))
         let upLocal = normalize(cross(forward, right))
         
-        // Panning moves BOTH position and target to keep the view direction the same
-        let sensitivity: Float = radius * 0.0006 * speed // Reduced sensitivity
+        // Panning moves position, target, and orbitPivot together
+        let sensitivity: Float = radius * 0.0006 * speed
         
-        let move = right * (-dx * sensitivity) + upLocal * (dy * sensitivity)
+        // Direction: drag right = view moves left, drag up = view moves down
+        let move = right * (dx * sensitivity) + upLocal * (dy * sensitivity)
         position += move
         target += move
+        if orbitPivot != nil {
+            orbitPivot! += move
+        }
     }
     
     // Keyboard Navigation
@@ -766,12 +778,10 @@ class MetalRenderer: NSObject, MTKViewDelegate {
         }
         
         if let hit = hitPoint {
-            print("picket hit: \(hit)")
-            // Update Camera Target to Pivot around this point
-            // We want to KEEP the current camera Position absolute, but change Target.
-            // This means the VIEW DIRECTION changes (Camera turns to look at clicked point)
-            camera.target = hit
-            camera.radius = distance(camera.position, hit)
+            print("picked hit: \(hit)")
+            // Set orbit pivot to clicked point WITHOUT changing camera view
+            // Only the orbit rotation center changes, not the view direction
+            camera.orbitPivot = hit
             
             self.view?.setNeedsDisplay(self.view?.bounds ?? .zero)
         }
