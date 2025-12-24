@@ -192,6 +192,8 @@ class SplatLoader {
                 let r2 = readVal(p_r2, currentPtr)
                 let r3 = readVal(p_r3, currentPtr)
 
+                // PLY orientation is fixed at generation time in AppState.fixPlyOrientation()
+                // Load coordinates as-is
                 splats.append(GaussianSplat(
                     position: SIMD3<Float>(x, y, z),
                     scale: SIMD3<Float>(s0, s1, s2),

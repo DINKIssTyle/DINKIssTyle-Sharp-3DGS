@@ -276,6 +276,11 @@ class AppState: ObservableObject {
                 
                 if let plyFile = plyFile {
                     let fullPath = "\(outDir)/\(plyFile)"
+                    
+                    // Post-process PLY to fix orientation (negate X and Y coordinates)
+                    self.processRunner.log("Fixing PLY orientation...")
+                    self.fixPlyOrientation(at: fullPath)
+                    
                     DispatchQueue.main.async {
                         self.currentPlyPath = fullPath
                         self.canView = true
@@ -300,6 +305,125 @@ class AppState: ObservableObject {
         guard let _ = currentPlyPath else { return }
         DispatchQueue.main.async {
             self.showViewer = true
+        }
+    }
+    
+    /// Fix PLY orientation by negating X and Y coordinates
+    /// Sharp generates PLY with horizontal mirror + vertical flip
+    func fixPlyOrientation(at path: String) {
+        guard let data = FileManager.default.contents(atPath: path) else {
+            processRunner.log("Error: Cannot read PLY file")
+            return
+        }
+        
+        // Find end_header marker
+        guard let headerEnd = data.range(of: "end_header".data(using: .utf8)!) else {
+            processRunner.log("Error: Invalid PLY header")
+            return
+        }
+        
+        var dataOffset = headerEnd.upperBound
+        // Skip newline after end_header
+        if dataOffset < data.count {
+            if data[dataOffset] == 0x0D { dataOffset += 1 }
+            if dataOffset < data.count && data[dataOffset] == 0x0A { dataOffset += 1 }
+        }
+        
+        // Parse header to find vertex count and stride
+        let headerData = data.subdata(in: 0..<headerEnd.lowerBound)
+        let headerString = String(decoding: headerData, as: UTF8.self)
+        let lines = headerString.components(separatedBy: "\n")
+        
+        var vertexCount = 0
+        var stride = 0
+        var xOffset = -1
+        var yOffset = -1
+        var zOffset = -1
+        var inVertexElement = false
+        var currentOffset = 0
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if trimmed.hasPrefix("element vertex") {
+                inVertexElement = true
+                let parts = trimmed.components(separatedBy: " ")
+                if let count = Int(parts.last ?? "") {
+                    vertexCount = count
+                }
+            } else if trimmed.hasPrefix("element ") {
+                inVertexElement = false
+            }
+            
+            if inVertexElement && trimmed.hasPrefix("property") {
+                let parts = trimmed.components(separatedBy: " ")
+                if parts.count >= 3 {
+                    let typeStr = parts[1]
+                    let name = parts[2]
+                    
+                    var typeSize = 0
+                    switch typeStr {
+                    case "float", "float32", "int", "int32", "uint", "uint32":
+                        typeSize = 4
+                    case "double", "float64":
+                        typeSize = 8
+                    case "short", "int16", "ushort", "uint16":
+                        typeSize = 2
+                    case "char", "int8", "uchar", "uint8":
+                        typeSize = 1
+                    default:
+                        break
+                    }
+                    
+                    if name == "x" { xOffset = currentOffset }
+                    if name == "y" { yOffset = currentOffset }
+                    if name == "z" { zOffset = currentOffset }
+                    
+                    currentOffset += typeSize
+                }
+            }
+        }
+        
+        stride = currentOffset
+        
+        guard xOffset >= 0 && yOffset >= 0 && zOffset >= 0 && stride > 0 && vertexCount > 0 else {
+            processRunner.log("Error: Cannot parse PLY structure (x:\(xOffset), y:\(yOffset), z:\(zOffset), stride:\(stride), count:\(vertexCount))")
+            return
+        }
+        
+        processRunner.log("Fixing \(vertexCount) vertices (stride:\(stride), x:\(xOffset), y:\(yOffset), z:\(zOffset))...")
+        
+        // Create mutable copy
+        var mutableData = data
+        
+        mutableData.withUnsafeMutableBytes { ptr in
+            guard let base = ptr.baseAddress else { return }
+            
+            for i in 0..<vertexCount {
+                let vertexStart = dataOffset + i * stride
+                
+                // X is kept as-is (no mirror needed)
+                
+                // Negate Y (fix vertical flip)
+                let yPtr = base + vertexStart + yOffset
+                var yVal = yPtr.assumingMemoryBound(to: Float.self).pointee
+                yVal = -yVal
+                yPtr.assumingMemoryBound(to: Float.self).pointee = yVal
+                
+                // Negate Z (to face forward instead of backward)
+                let zPtr = base + vertexStart + zOffset
+                var zVal = zPtr.assumingMemoryBound(to: Float.self).pointee
+                zVal = -zVal
+                zPtr.assumingMemoryBound(to: Float.self).pointee = zVal
+            }
+        }
+        
+        // Write back
+        do {
+            try mutableData.write(to: URL(fileURLWithPath: path))
+            processRunner.log("PLY orientation fixed successfully")
+        } catch {
+            processRunner.log("Error writing fixed PLY: \(error)")
         }
     }
 }

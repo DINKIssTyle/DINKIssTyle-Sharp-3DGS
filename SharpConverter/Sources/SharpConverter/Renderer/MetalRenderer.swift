@@ -402,15 +402,12 @@ class MetalRenderer: NSObject, MTKViewDelegate {
                     
                     self.camera.target = center
                     self.camera.radius = cameraDist
-                    // Fix: Flip Z to view from front? User reported viewing from behind.
-                    // Trying -cameraDist to look from opposite side.
-                    self.camera.position = center + [0, 0, -cameraDist]
+                    // Position camera on positive Z to view model front
+                    self.camera.position = center + [0, 0, cameraDist]
                     
                     // Orientation is determined by position and target.
-                    // Resetting Up vector ensures consistent orientation.
-                    
-                    // FIX 1: Set Up vector to Negative Y to handle Y-Down coordinates (Computer Vision Standard)
-                    self.camera.up = SIMD3<Float>(0, -1, 0)
+                    // Standard Y-Up (PLY orientation is now fixed in SplatLoader)
+                    self.camera.up = SIMD3<Float>(0, 1, 0)
                     
                     self.camera.far = max(100.0, cameraDist * 50.0)
                     self.camera.near = max(0.01, cameraDist * 0.01)
