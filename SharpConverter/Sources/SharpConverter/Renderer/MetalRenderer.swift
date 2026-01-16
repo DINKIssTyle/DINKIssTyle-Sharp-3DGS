@@ -1,6 +1,8 @@
 import MetalKit
 import SwiftUI
 import MetalPerformanceShaders
+import ImageIO
+import UniformTypeIdentifiers
 
 struct Uniforms {
     var viewMatrix: matrix_float4x4
@@ -438,8 +440,173 @@ class MetalRenderer: NSObject, MTKViewDelegate {
         self.camera.position = pos
         self.camera.target = tgt
         self.camera.radius = rad
-        self.camera.up = SIMD3<Float>(0, -1, 0) // Reset Up as well
+        self.camera.up = SIMD3<Float>(0, 1, 0) // Reset Up as well
         self.view?.setNeedsDisplay(self.view?.bounds ?? .zero)
+    }
+    
+    func saveScreenshot(to url: URL) {
+        guard let view = view else {
+            print("ERROR: No view for screenshot")
+            return
+        }
+        
+        guard let pipelineState = pipelineState else {
+            print("ERROR: No pipeline state for screenshot")
+            return
+        }
+        
+        let width = Int(view.drawableSize.width)
+        let height = Int(view.drawableSize.height)
+        
+        // Create texture for offscreen rendering with alpha support
+        let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        textureDescriptor.usage = [.renderTarget, .shaderRead]
+        #if os(macOS)
+        textureDescriptor.storageMode = .managed
+        #else
+        textureDescriptor.storageMode = .shared
+        #endif
+        
+        guard let screenshotTexture = device.makeTexture(descriptor: textureDescriptor) else {
+            print("ERROR: Failed to create screenshot texture")
+            return
+        }
+        
+        // Create depth texture
+        let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .depth32Float,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        depthDescriptor.usage = .renderTarget
+        depthDescriptor.storageMode = .private
+        
+        guard let depthTexture = device.makeTexture(descriptor: depthDescriptor) else {
+            print("ERROR: Failed to create depth texture")
+            return
+        }
+        
+        // Create render pass with transparent clear color
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.colorAttachments[0].texture = screenshotTexture
+        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].storeAction = .store
+        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0) // Transparent
+        
+        renderPassDescriptor.depthAttachment.texture = depthTexture
+        renderPassDescriptor.depthAttachment.loadAction = .clear
+        renderPassDescriptor.depthAttachment.storeAction = .dontCare
+        renderPassDescriptor.depthAttachment.clearDepth = 1.0
+        
+        guard let commandBuffer = commandQueue.makeCommandBuffer() else {
+            print("ERROR: Failed to create command buffer")
+            return
+        }
+        
+        // Render splats
+        if splatCount > 0, let pos = posBuffer, let scale = scaleBuffer, let col = colorBuffer, let rot = rotBuffer, let sort = sortBuffer {
+            
+            // Perform sort first
+            self.performSort()
+            
+            var uniforms = Uniforms(
+                viewMatrix: camera.viewMatrix,
+                projectionMatrix: camera.projectionMatrix,
+                screenSize: simd_float2(Float(width), Float(height)),
+                splatCount: UInt32(splatCount),
+                pad: 0
+            )
+            
+            if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
+                renderEncoder.setRenderPipelineState(pipelineState)
+                
+                renderEncoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.size, index: 4)
+                renderEncoder.setVertexBuffer(pos, offset: 0, index: 0)
+                renderEncoder.setVertexBuffer(scale, offset: 0, index: 1)
+                renderEncoder.setVertexBuffer(col, offset: 0, index: 2)
+                renderEncoder.setVertexBuffer(rot, offset: 0, index: 3)
+                renderEncoder.setVertexBuffer(sort, offset: 0, index: 5)
+                
+                renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4, instanceCount: splatCount)
+                
+                renderEncoder.endEncoding()
+            }
+        }
+        
+        #if os(macOS)
+        if let blit = commandBuffer.makeBlitCommandEncoder() {
+            blit.synchronize(resource: screenshotTexture)
+            blit.endEncoding()
+        }
+        #endif
+        
+        commandBuffer.addCompletedHandler { [weak self] _ in
+            guard let self = self else { return }
+            
+            // Read texture data
+            let bytesPerPixel = 4
+            let bytesPerRow = width * bytesPerPixel
+            var imageData = [UInt8](repeating: 0, count: height * bytesPerRow)
+            
+            screenshotTexture.getBytes(
+                &imageData,
+                bytesPerRow: bytesPerRow,
+                from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0),
+                                size: MTLSize(width: width, height: height, depth: 1)),
+                mipmapLevel: 0
+            )
+            
+            // Convert BGRA to RGBA
+            for i in stride(from: 0, to: imageData.count, by: 4) {
+                let b = imageData[i]
+                let r = imageData[i + 2]
+                imageData[i] = r
+                imageData[i + 2] = b
+            }
+            
+            // Create CGImage with alpha
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+            
+            guard let context = CGContext(
+                data: &imageData,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo.rawValue
+            ) else {
+                print("ERROR: Failed to create CGContext")
+                return
+            }
+            
+            guard let cgImage = context.makeImage() else {
+                print("ERROR: Failed to create CGImage")
+                return
+            }
+            
+            // Save as PNG
+            let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
+            if let dest = destination {
+                CGImageDestinationAddImage(dest, cgImage, nil)
+                if CGImageDestinationFinalize(dest) {
+                    print("Screenshot saved to: \(url.path)")
+                } else {
+                    print("ERROR: Failed to finalize PNG")
+                }
+            } else {
+                print("ERROR: Failed to create image destination")
+            }
+        }
+        
+        commandBuffer.commit()
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

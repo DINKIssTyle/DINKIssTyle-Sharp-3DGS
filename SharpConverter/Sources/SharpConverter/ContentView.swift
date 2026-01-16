@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var exportTrigger: Bool = false
     @State private var exportURL: URL?
     @State private var showExportSettings: Bool = false
+    @State private var screenshotTrigger: Bool = false
+    @State private var screenshotURL: URL?
     @State private var exportWidth: Int = 1920
     @State private var exportHeight: Int = 1080
     @State private var exportFPS: Int = 60
@@ -156,7 +158,9 @@ struct ContentView: View {
                                       exportURL: $exportURL,
                                       exportWidth: $exportWidth,
                                       exportHeight: $exportHeight,
-                                      animationManager: animationManager)
+                                      animationManager: animationManager,
+                                      screenshotTrigger: $screenshotTrigger,
+                                      screenshotURL: $screenshotURL)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                      Text("Error: No PLY Path")
@@ -200,6 +204,24 @@ struct ContentView: View {
                     
                     Divider()
                         .frame(height: 20)
+                    
+                    // Screenshot Button
+                    Button(action: {
+                        let panel = NSSavePanel()
+                        panel.allowedContentTypes = [.png]
+                        panel.canCreateDirectories = true
+                        panel.nameFieldStringValue = "screenshot.png"
+                        
+                        if panel.runModal() == .OK, let url = panel.url {
+                            screenshotURL = url
+                            screenshotTrigger = true
+                        }
+                    }) {
+                        Image(systemName: "camera")
+                            .foregroundColor(.white)
+                            .help("Save Screenshot")
+                    }
+                    .buttonStyle(.plain)
                     
                     // Timeline Toggle
                     Button(action: {

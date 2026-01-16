@@ -12,6 +12,8 @@ struct GaussianSplatView: NSViewRepresentable {
     @Binding var exportWidth: Int
     @Binding var exportHeight: Int
     var animationManager: AnimationManager?
+    @Binding var screenshotTrigger: Bool
+    @Binding var screenshotURL: URL?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -81,6 +83,13 @@ struct GaussianSplatView: NSViewRepresentable {
                 renderer.startExport(to: url)
                 DispatchQueue.main.async {
                     exportTrigger = false
+                }
+            }
+            
+            if screenshotTrigger, let url = screenshotURL {
+                renderer.saveScreenshot(to: url)
+                DispatchQueue.main.async {
+                    screenshotTrigger = false
                 }
             }
         }
